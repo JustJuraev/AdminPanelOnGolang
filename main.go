@@ -29,8 +29,15 @@ type Product struct {
 	Image      string `json:"image"`
 }
 
+type Category struct {
+	Id    int
+	Name  string
+	Image string
+}
+
 var cache = map[string]User{}
 var produts = []Product{}
+var categories = []Category{}
 
 func Login(page http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("html_files/login.html")
@@ -93,8 +100,47 @@ func LoginCheck(page http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func Categories(page http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("html_files/category.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	res, err := db.Query("SELECT * FROM public.categories")
+
+	if err != nil {
+		panic(err)
+	}
+
+	categories = []Category{}
+	for res.Next() {
+		var cat Category
+		err = res.Scan(&cat.Id, &cat.Name, &cat.Image)
+		if err != nil {
+			panic(err)
+		}
+		categories = append(categories, cat)
+	}
+
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "category", categories)
+	} else {
+		http.Redirect(page, r, "/", http.StatusSeeOther)
+	}
+
+}
+
 func Products(page http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("html_files/products.html")
+	tmpl, err := template.ParseFiles("html_files/products.html", "html_files/zagolovok.html")
 	if err != nil {
 		panic(err)
 	}
@@ -142,7 +188,7 @@ func main() {
 	http.HandleFunc("/login_check", LoginCheck)
 
 	http.HandleFunc("/products", Products)
-
+	http.HandleFunc("/category", Categories)
 	http.ListenAndServe(":8081", nil)
 
 	fmt.Print(len(cache))
