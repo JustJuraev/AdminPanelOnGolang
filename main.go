@@ -38,6 +38,7 @@ type Category struct {
 var cache = map[string]User{}
 var produts = []Product{}
 var categories = []Category{}
+var users = []User{}
 
 func Login(page http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("html_files/login.html")
@@ -136,7 +137,6 @@ func Categories(page http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Redirect(page, r, "/", http.StatusSeeOther)
 	}
-
 }
 
 func Products(page http.ResponseWriter, r *http.Request) {
@@ -179,7 +179,44 @@ func Products(page http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Redirect(page, r, "/", http.StatusSeeOther)
 	}
+}
 
+func Users(page http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("html_files/user.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	res, err := db.Query("SELECT * FROM public.users")
+
+	if err != nil {
+		panic(err)
+	}
+
+	users = []User{}
+	for res.Next() {
+		var user User
+		err = res.Scan(&user.Id, &user.Name, &user.Password)
+		if err != nil {
+			panic(err)
+		}
+		users = append(users, user)
+	}
+
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "user", users)
+	} else {
+		http.Redirect(page, r, "/login", http.StatusSeeOther)
+	}
 }
 
 func main() {
@@ -189,6 +226,7 @@ func main() {
 
 	http.HandleFunc("/products", Products)
 	http.HandleFunc("/category", Categories)
+	http.HandleFunc("/user", Users)
 	http.ListenAndServe(":8081", nil)
 
 	fmt.Print(len(cache))
