@@ -4,10 +4,13 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/hex"
+	"io"
+	"path/filepath"
 
 	"html/template"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -240,6 +243,113 @@ func Users(page http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func AddProductForm(page http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("html_files/addproduct.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	res, err := db.Query("SELECT * FROM public.categories")
+
+	if err != nil {
+		panic(err)
+	}
+
+	categories = []Category{}
+	for res.Next() {
+		var cat Category
+		err = res.Scan(&cat.Id, &cat.Name, &cat.Image)
+		if err != nil {
+			panic(err)
+		}
+		categories = append(categories, cat)
+	}
+
+	tmpl.ExecuteTemplate(page, "addproduct", categories)
+}
+
+func AddingProductPost(page http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+	price := r.FormValue("price")
+	shortdesc := r.FormValue("shortdesc")
+	longdesc := r.FormValue("longdesc")
+	categoryid := r.FormValue("categoryid")
+
+	file, handler, err := r.FormFile("myFile")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	dst, _ := os.Create(filepath.Join("temp-images", handler.Filename))
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(page, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	_, err = db.Exec("INSERT INTO public.products (name, price, shortdesc, longdesc, categoryid, image) VALUES ($1, $2, $3, $4, $5, $6)", name, price, shortdesc, longdesc, categoryid, handler.Filename)
+
+	http.Redirect(page, r, "/products", http.StatusSeeOther)
+}
+
+func addCategoryForm(page http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("html_files/addcategory.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+	tmpl.ExecuteTemplate(page, "addcategory", nil)
+}
+
+func addCategoryPost(page http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+
+	file, handler, err := r.FormFile("myFile")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	dst, _ := os.Create(filepath.Join("temp-images", handler.Filename))
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(page, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	_, err = db.Exec("INSERT INTO public.categories (name, image) VALUES ($1, $2)", name, handler.Filename)
+
+	http.Redirect(page, r, "/category", http.StatusSeeOther)
+}
+
 func GetOrderItem(page http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -324,6 +434,10 @@ func main() {
 	router.HandleFunc("/category", Categories)
 	router.HandleFunc("/user", Users)
 	router.HandleFunc("/order", Orders)
+	router.HandleFunc("/addproduct", AddProductForm)
+	router.HandleFunc("/adding_product", AddingProductPost)
+	router.HandleFunc("/addcategory", addCategoryForm)
+	router.HandleFunc("/adding_category", addCategoryPost)
 	http.ListenAndServe(":8081", nil)
 
 	//	fmt.Print(len(cache))
