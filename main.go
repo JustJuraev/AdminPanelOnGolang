@@ -4,12 +4,13 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/hex"
-	"fmt"
+
 	"html/template"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
@@ -35,10 +36,30 @@ type Category struct {
 	Image string
 }
 
+type Order struct {
+	Id       int
+	Address  string
+	Delivery bool
+	Number   string
+	CartNum  string
+	Time     time.Time
+	UserId   int
+}
+
+type OrderItem struct {
+	Id           int
+	ProductId    int
+	ProductName  string
+	ProductCount int
+	OrderId      int
+}
+
 var cache = map[string]User{}
 var produts = []Product{}
 var categories = []Category{}
 var users = []User{}
+var orders = []Order{}
+var orderitem = []OrderItem{}
 
 func Login(page http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("html_files/login.html")
@@ -219,16 +240,92 @@ func Users(page http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func GetOrderItem(page http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	tmpl, err := template.ParseFiles("html_files/getorderitem.html", "html_files/zagolovok.html")
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	row, err := db.Query("SELECT * FROM public.orderitems WHERE orderid = $1", id)
+	orderitem := []OrderItem{}
+
+	for row.Next() {
+		var orditem OrderItem
+		err = row.Scan(&orditem.Id, &orditem.ProductId, &orditem.ProductName, &orditem.ProductCount, &orditem.OrderId)
+		if err != nil {
+			panic(err)
+		}
+
+		orderitem = append(orderitem, orditem)
+	}
+
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "getorderitems", orderitem)
+	} else {
+		http.Redirect(page, r, "/login", http.StatusSeeOther)
+	}
+}
+
+func Orders(page http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("html_files/order.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	res, err := db.Query("SELECT * FROM public.orders")
+
+	if err != nil {
+		panic(err)
+	}
+
+	orders = []Order{}
+	for res.Next() {
+		var ord Order
+		err = res.Scan(&ord.Id, &ord.Address, &ord.Delivery, &ord.Number, &ord.CartNum, &ord.Time, &ord.UserId)
+		if err != nil {
+			panic(err)
+		}
+		orders = append(orders, ord)
+	}
+
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "order", orders)
+	} else {
+		http.Redirect(page, r, "/login", http.StatusSeeOther)
+	}
+}
+
 func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
-	http.HandleFunc("/", Login)
-	http.HandleFunc("/login_check", LoginCheck)
 
-	http.HandleFunc("/products", Products)
-	http.HandleFunc("/category", Categories)
-	http.HandleFunc("/user", Users)
+	router := mux.NewRouter()
+	http.Handle("/", router)
+	router.HandleFunc("/", Login)
+	router.HandleFunc("/orderitem/{id:[0-9]+}", GetOrderItem)
+	router.HandleFunc("/login_check", LoginCheck)
+	router.HandleFunc("/products", Products)
+	router.HandleFunc("/category", Categories)
+	router.HandleFunc("/user", Users)
+	router.HandleFunc("/order", Orders)
 	http.ListenAndServe(":8081", nil)
 
-	fmt.Print(len(cache))
+	//	fmt.Print(len(cache))
 
 }
