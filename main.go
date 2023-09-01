@@ -57,12 +57,26 @@ type OrderItem struct {
 	OrderId      int
 }
 
+type ProductProperty struct {
+	Id            int
+	ProductId     int
+	PropertyName  string
+	PropertyValue string
+	CategoryId    int
+}
+
+type Property struct {
+	Id   int
+	Name string
+}
+
 var cache = map[string]User{}
 var produts = []Product{}
 var categories = []Category{}
 var users = []User{}
 var orders = []Order{}
 var orderitem = []OrderItem{}
+var property = []Property{}
 
 func Login(page http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("html_files/login.html")
@@ -350,6 +364,108 @@ func addCategoryPost(page http.ResponseWriter, r *http.Request) {
 	http.Redirect(page, r, "/category", http.StatusSeeOther)
 }
 
+func AddProductProperty(page http.ResponseWriter, r *http.Request) {
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	res, err := db.Query("SELECT * FROM public.categories")
+
+	if err != nil {
+		panic(err)
+	}
+
+	categories = []Category{}
+	for res.Next() {
+		var cat Category
+		err = res.Scan(&cat.Id, &cat.Name, &cat.Image)
+		if err != nil {
+			panic(err)
+		}
+		categories = append(categories, cat)
+	}
+
+	res2, err2 := db.Query("SELECT * FROM public.products")
+
+	if err2 != nil {
+		panic(err)
+	}
+
+	produts = []Product{}
+	for res2.Next() {
+		var prd Product
+		err2 = res2.Scan(&prd.Id, &prd.Name, &prd.Price, &prd.ShortDesc, &prd.LongDesc, &prd.CategoryId, &prd.Image)
+		if err2 != nil {
+			panic(err)
+		}
+
+		produts = append(produts, prd)
+
+	}
+
+	//fmt.Println(produts)
+
+	res3, err3 := db.Query("SELECT * FROM public.properties")
+	if err3 != nil {
+		panic(err)
+	}
+
+	property = []Property{}
+	for res3.Next() {
+		var pr Property
+		err3 = res3.Scan(&pr.Id, &pr.Name)
+		if err3 != nil {
+			panic(err)
+		}
+
+		property = append(property, pr)
+	}
+
+	///	fmt.Println(property)
+
+	data := struct {
+		Array1 []Category
+		Array2 []Product
+		Array3 []Property
+	}{
+		Array1: categories,
+		Array2: produts,
+		Array3: property,
+	}
+	tmpl, err := template.ParseFiles("html_files/addproperty.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl.ExecuteTemplate(page, "addproperty", data)
+}
+
+func AddProductPropertyPost(page http.ResponseWriter, r *http.Request) {
+	productid := r.FormValue("productid")
+	propertyname := r.FormValue("propertyname")
+	categoryid := r.FormValue("categoryid")
+	propertyvalue := r.FormValue("propertyvalue")
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	_, err = db.Exec("INSERT INTO public.productproperties (productid, propertyname, propertyvalue, categoryid) VALUES ($1, $2, $3, $4)", productid, propertyname, propertyvalue, categoryid)
+
+	http.Redirect(page, r, "/products", http.StatusSeeOther)
+}
+
 func GetOrderItem(page http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -438,6 +554,9 @@ func main() {
 	router.HandleFunc("/adding_product", AddingProductPost)
 	router.HandleFunc("/addcategory", addCategoryForm)
 	router.HandleFunc("/adding_category", addCategoryPost)
+	router.HandleFunc("/addproperty", AddProductProperty)
+	router.HandleFunc("/adding_property", AddProductPropertyPost)
+
 	http.ListenAndServe(":8081", nil)
 
 	//	fmt.Print(len(cache))
