@@ -617,8 +617,114 @@ func DeleteCategory(page http.ResponseWriter, r *http.Request) {
 	http.Redirect(page, r, "/category", http.StatusSeeOther)
 }
 
+func UpdateProduct(page http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	row := db.QueryRow("SELECT * FROM public.products WHERE id = $1", id)
+	prd := Product{}
+	err2 := row.Scan(&prd.Id, &prd.Name, &prd.Image, &prd.ShortDesc, &prd.LongDesc, &prd.CategoryId, &prd.Image)
+	if err2 != nil {
+		panic(err2)
+	}
+
+	res2, err2 := db.Query("SELECT * FROM public.categories")
+
+	if err2 != nil {
+		panic(err2)
+	}
+
+	categories = []Category{}
+	for res2.Next() {
+		var cat Category
+		err = res2.Scan(&cat.Id, &cat.Name, &cat.Image)
+		if err != nil {
+			panic(err)
+		}
+		categories = append(categories, cat)
+	}
+
+	data := struct {
+		Array   []Category
+		Product Product
+	}{
+		Array:   categories,
+		Product: prd,
+	}
+
+	tmpl, err := template.ParseFiles("html_files/updateproduct.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "updateproduct", data)
+	} else {
+		http.Redirect(page, r, "/", http.StatusSeeOther)
+	}
+}
+
+func UpdateProductPost(page http.ResponseWriter, r *http.Request) {
+	id := r.FormValue("id")
+	name := r.FormValue("name")
+	price := r.FormValue("price")
+	shortdesc := r.FormValue("shortdesc")
+	longdesc := r.FormValue("longdesc")
+	categoryid := r.FormValue("categoryid")
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	row := db.QueryRow("SELECT * FROM public.products WHERE id = $1", id)
+	prd := Product{}
+	err2 := row.Scan(&prd.Id, &prd.Name, &prd.Image, &prd.ShortDesc, &prd.LongDesc, &prd.CategoryId, &prd.Image)
+	if err2 != nil {
+		panic(err2)
+	}
+
+	str := "temp-images/" + prd.Image
+	e := os.Remove(str)
+	if e != nil {
+		panic(e)
+	}
+
+	file, handler, err := r.FormFile("myFile")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	dst, _ := os.Create(filepath.Join("/temp-images", handler.Filename))
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(page, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec("UPDATE public.products SET name=$1, price=$2, shortdesc=$3, longdesc=$4, categoryid=$5, image=$6 WHERE id = $7", name, price, shortdesc, longdesc, categoryid, handler.Filename, id)
+
+	http.Redirect(page, r, "/products", http.StatusSeeOther)
+}
+
 func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
+	http.Handle("/temp-images/", http.StripPrefix("/temp-images/", http.FileServer(http.Dir("./temp-images/"))))
 
 	router := mux.NewRouter()
 	http.Handle("/", router)
@@ -626,6 +732,8 @@ func main() {
 	router.HandleFunc("/orderitem/{id:[0-9]+}", GetOrderItem)
 	router.HandleFunc("/deleteproduct/{id:[0-9]+}", DeleteProduct)
 	router.HandleFunc("/deletecategory/{id:[0-9]+}", DeleteCategory)
+	router.HandleFunc("/updateproduct/{id:[0-9]+}", UpdateProduct)
+	router.HandleFunc("/update_product", UpdateProductPost)
 	router.HandleFunc("/login_check", LoginCheck)
 	router.HandleFunc("/products", Products)
 	router.HandleFunc("/category", Categories)

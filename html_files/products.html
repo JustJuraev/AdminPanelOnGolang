@@ -22,6 +22,7 @@
                 <th scope="col">Название</th>
                 <th scope="col">Цена</th>
                 <th scope="col">#</th>
+                <th scope="col">#</th>
               </tr>
             </thead>
            
@@ -29,9 +30,10 @@
                 {{range .}}
               <tr scope="row">
                 <td>{{.Id}}</th>
-                <td><img class="catimg" src={{.Image}}></td>
+                <td><img class="catimg" src="/temp-images/{{.Image}}"></td>
                 <td>{{.Name}}</td>  
                 <td>Цена: {{.Price}} Сум</td>  
+                <td><a href="/updateproduct/{{.Id}}" class="btn btn-success">Изменить</a></td>  
                 <td><a href="/deleteproduct/{{.Id}}" class="btn btn-danger">Удалить</a></td>  
               </tr>
               {{end}}
