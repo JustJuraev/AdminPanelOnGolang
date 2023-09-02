@@ -538,6 +538,39 @@ func Orders(page http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func DeleteProduct(page http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	row := db.QueryRow("SELECT * FROM public.products WHERE id = $1", id)
+	prd := Product{}
+	err2 := row.Scan(&prd.Id, &prd.Name, &prd.Image, &prd.ShortDesc, &prd.LongDesc, &prd.CategoryId, &prd.Image)
+	if err2 != nil {
+		panic(err2)
+	}
+
+	_, err = db.Exec("DELETE FROM public.products WHERE id = $1", id)
+	if err != nil {
+		panic(err)
+	}
+
+	str := "temp-images/" + prd.Image
+	e := os.Remove(str)
+	if e != nil {
+		panic(e)
+	}
+	http.Redirect(page, r, "/products", http.StatusSeeOther)
+}
+
 func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 
@@ -545,6 +578,7 @@ func main() {
 	http.Handle("/", router)
 	router.HandleFunc("/", Login)
 	router.HandleFunc("/orderitem/{id:[0-9]+}", GetOrderItem)
+	router.HandleFunc("/deleteproduct/{id:[0-9]+}", DeleteProduct)
 	router.HandleFunc("/login_check", LoginCheck)
 	router.HandleFunc("/products", Products)
 	router.HandleFunc("/category", Categories)
