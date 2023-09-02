@@ -632,7 +632,7 @@ func UpdateProduct(page http.ResponseWriter, r *http.Request) {
 
 	row := db.QueryRow("SELECT * FROM public.products WHERE id = $1", id)
 	prd := Product{}
-	err2 := row.Scan(&prd.Id, &prd.Name, &prd.Image, &prd.ShortDesc, &prd.LongDesc, &prd.CategoryId, &prd.Image)
+	err2 := row.Scan(&prd.Id, &prd.Name, &prd.Price, &prd.ShortDesc, &prd.LongDesc, &prd.CategoryId, &prd.Image)
 	if err2 != nil {
 		panic(err2)
 	}
@@ -697,29 +697,128 @@ func UpdateProductPost(page http.ResponseWriter, r *http.Request) {
 		panic(err2)
 	}
 
-	str := "temp-images/" + prd.Image
-	e := os.Remove(str)
-	if e != nil {
-		panic(e)
+	file, handler, err := r.FormFile("myFile")
+	if file == nil {
+		_, err3 := db.Exec("UPDATE public.products SET name=$1, price=$2, shortdesc=$3, longdesc=$4, categoryid=$5, image=$6 WHERE id = $7", name, price, shortdesc, longdesc, categoryid, prd.Image, id)
+		if err3 != nil {
+			panic(err3)
+		}
+		http.Redirect(page, r, "/products", http.StatusSeeOther)
+		return
 	}
 
-	file, handler, err := r.FormFile("myFile")
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
 
-	dst, _ := os.Create(filepath.Join("/temp-images", handler.Filename))
-	defer dst.Close()
+	if handler.Filename != "" {
+		dst, _ := os.Create(filepath.Join("temp-images", handler.Filename))
+		defer dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
-		http.Error(page, err.Error(), http.StatusInternalServerError)
-		return
+		str := "temp-images/" + prd.Image
+		e := os.Remove(str)
+		if e != nil {
+			panic(e)
+		}
+
+		if _, err := io.Copy(dst, file); err != nil {
+			http.Error(page, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		_, err = db.Exec("UPDATE public.products SET name=$1, price=$2, shortdesc=$3, longdesc=$4, categoryid=$5, image=$6 WHERE id = $7", name, price, shortdesc, longdesc, categoryid, handler.Filename, id)
 	}
 
-	_, err = db.Exec("UPDATE public.products SET name=$1, price=$2, shortdesc=$3, longdesc=$4, categoryid=$5, image=$6 WHERE id = $7", name, price, shortdesc, longdesc, categoryid, handler.Filename, id)
-
 	http.Redirect(page, r, "/products", http.StatusSeeOther)
+}
+
+func UpdateCategory(page http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	row := db.QueryRow("SELECT * FROM public.categories WHERE id = $1", id)
+	cat := Category{}
+	err2 := row.Scan(&cat.Id, &cat.Name, &cat.Image)
+	if err2 != nil {
+		panic(err2)
+	}
+
+	tmpl, err := template.ParseFiles("html_files/updatecategory.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "updatecategory", cat)
+	} else {
+		http.Redirect(page, r, "/", http.StatusSeeOther)
+	}
+}
+
+func UpdateCategoryPost(page http.ResponseWriter, r *http.Request) {
+	id := r.FormValue("id")
+	name := r.FormValue("name")
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	row := db.QueryRow("SELECT * FROM public.categories WHERE id = $1", id)
+	cat := Category{}
+	err2 := row.Scan(&cat.Id, &cat.Name, &cat.Image)
+	if err2 != nil {
+		panic(err2)
+	}
+
+	file, handler, err := r.FormFile("myFile")
+	if file == nil {
+		_, err3 := db.Exec("UPDATE public.categories SET name=$1, image=$2 WHERE id = $3", name, cat.Image, id)
+		if err3 != nil {
+			panic(err3)
+		}
+		http.Redirect(page, r, "/category", http.StatusSeeOther)
+		return
+	}
+	if err != nil {
+		panic(err)
+	}
+
+	defer file.Close()
+
+	if handler.Filename != "" {
+		dst, _ := os.Create(filepath.Join("temp-images", handler.Filename))
+		defer dst.Close()
+
+		if _, err := io.Copy(dst, file); err != nil {
+			http.Error(page, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		str := "temp-images/" + cat.Image
+		e := os.Remove(str)
+		if e != nil {
+			panic(e)
+		}
+
+		_, err = db.Exec("UPDATE public.categories SET name=$1, image=$2 WHERE id = $3", name, handler.Filename, id)
+	}
+
+	http.Redirect(page, r, "/category", http.StatusSeeOther)
 }
 
 func main() {
@@ -733,7 +832,9 @@ func main() {
 	router.HandleFunc("/deleteproduct/{id:[0-9]+}", DeleteProduct)
 	router.HandleFunc("/deletecategory/{id:[0-9]+}", DeleteCategory)
 	router.HandleFunc("/updateproduct/{id:[0-9]+}", UpdateProduct)
+	router.HandleFunc("/updatecategory/{id:[0-9]+}", UpdateCategory)
 	router.HandleFunc("/update_product", UpdateProductPost)
+	router.HandleFunc("/update_category", UpdateCategoryPost)
 	router.HandleFunc("/login_check", LoginCheck)
 	router.HandleFunc("/products", Products)
 	router.HandleFunc("/category", Categories)
