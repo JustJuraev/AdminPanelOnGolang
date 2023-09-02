@@ -287,7 +287,11 @@ func AddProductForm(page http.ResponseWriter, r *http.Request) {
 		categories = append(categories, cat)
 	}
 
-	tmpl.ExecuteTemplate(page, "addproduct", categories)
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "addproduct", categories)
+	} else {
+		http.Redirect(page, r, "/", http.StatusSeeOther)
+	}
 }
 
 func AddingProductPost(page http.ResponseWriter, r *http.Request) {
@@ -330,7 +334,12 @@ func addCategoryForm(page http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-	tmpl.ExecuteTemplate(page, "addcategory", nil)
+
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "addcategory", nil)
+	} else {
+		http.Redirect(page, r, "/", http.StatusSeeOther)
+	}
 }
 
 func addCategoryPost(page http.ResponseWriter, r *http.Request) {
@@ -443,7 +452,11 @@ func AddProductProperty(page http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	tmpl.ExecuteTemplate(page, "addproperty", data)
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "addproperty", data)
+	} else {
+		http.Redirect(page, r, "/", http.StatusSeeOther)
+	}
 }
 
 func AddProductPropertyPost(page http.ResponseWriter, r *http.Request) {
@@ -571,6 +584,39 @@ func DeleteProduct(page http.ResponseWriter, r *http.Request) {
 	http.Redirect(page, r, "/products", http.StatusSeeOther)
 }
 
+func DeleteCategory(page http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	row := db.QueryRow("SELECT * FROM public.categories WHERE id = $1", id)
+	cat := Category{}
+	err2 := row.Scan(&cat.Id, &cat.Name, &cat.Image)
+	if err2 != nil {
+		panic(err2)
+	}
+
+	_, err = db.Exec("DELETE FROM public.categories WHERE id = $1", id)
+	if err != nil {
+		panic(err)
+	}
+
+	str := "temp-images/" + cat.Image
+	e := os.Remove(str)
+	if e != nil {
+		panic(e)
+	}
+	http.Redirect(page, r, "/category", http.StatusSeeOther)
+}
+
 func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 
@@ -579,6 +625,7 @@ func main() {
 	router.HandleFunc("/", Login)
 	router.HandleFunc("/orderitem/{id:[0-9]+}", GetOrderItem)
 	router.HandleFunc("/deleteproduct/{id:[0-9]+}", DeleteProduct)
+	router.HandleFunc("/deletecategory/{id:[0-9]+}", DeleteCategory)
 	router.HandleFunc("/login_check", LoginCheck)
 	router.HandleFunc("/products", Products)
 	router.HandleFunc("/category", Categories)

@@ -20,6 +20,7 @@
                     <th scope="col">#</th>
                     <th scope="col">Изображение</th>
                     <th scope="col">Название</th>
+                    <th scope="col">#</th>
                   </tr>
                 </thead>
                
@@ -29,6 +30,7 @@
                     <td>{{.Id}}</th>
                     <td><img class="catimg" src={{.Image}}></td>
                     <td>{{.Name}}</td>  
+                    <td><a class="btn btn-danger" href="/deletecategory/{{.Id}}">Удалить</a></td>  
                   </tr>
                   {{end}}
                 </tbody>
