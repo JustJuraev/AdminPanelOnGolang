@@ -77,6 +77,7 @@ var users = []User{}
 var orders = []Order{}
 var orderitem = []OrderItem{}
 var property = []Property{}
+var productproperty = []ProductProperty{}
 
 func Login(page http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("html_files/login.html")
@@ -821,6 +822,90 @@ func UpdateCategoryPost(page http.ResponseWriter, r *http.Request) {
 	http.Redirect(page, r, "/category", http.StatusSeeOther)
 }
 
+func UpdateProductProperty(page http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	row, err2 := db.Query("SELECT * FROM public.productproperties WHERE productid = $1", id)
+	if err2 != nil {
+		panic(err2)
+	}
+	productproperty = []ProductProperty{}
+	for row.Next() {
+		var pr ProductProperty
+		err3 := row.Scan(&pr.Id, &pr.ProductId, &pr.PropertyName, &pr.PropertyValue, &pr.CategoryId)
+		if err3 != nil {
+			panic(err3)
+		}
+		productproperty = append(productproperty, pr)
+	}
+
+	tmpl, err := template.ParseFiles("html_files/updateproductproperty.html", "html_files/zagolovok.html")
+	if err != nil {
+		panic(err)
+	}
+
+	if len(cache) > 0 {
+		tmpl.ExecuteTemplate(page, "updateproductproperty", productproperty)
+	} else {
+		http.Redirect(page, r, "/", http.StatusSeeOther)
+	}
+}
+
+func UpdateProductPropertyPost(page http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	id := r.Form["id"]
+	productid := r.Form["productid"]
+	propertyname := r.Form["propetyname"]
+	categoryid := r.Form["categoryid"]
+	propertyvalue := r.Form["propertyvalue"]
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	for i := 0; i < len(id); i++ {
+		_, err = db.Exec("UPDATE public.productproperties SET productid=$1, propertyname=$2, propertyvalue=$3, categoryid=$4 WHERE id = $5", productid[i], propertyname[i], propertyvalue[i], categoryid[i], id[i])
+	}
+	http.Redirect(page, r, "/products", http.StatusSeeOther)
+}
+
+func DeleteProductPropertyPost(page http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	connStr := "user=postgres password=123456 dbname=netshopgolang sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = db.Exec("DELETE FROM public.productproperties WHERE id = $1", id)
+	if err != nil {
+		panic(err)
+	}
+
+	defer db.Close()
+
+	http.Redirect(page, r, "/products", http.StatusSeeOther)
+
+}
+
 func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	http.Handle("/temp-images/", http.StripPrefix("/temp-images/", http.FileServer(http.Dir("./temp-images/"))))
@@ -833,7 +918,10 @@ func main() {
 	router.HandleFunc("/deletecategory/{id:[0-9]+}", DeleteCategory)
 	router.HandleFunc("/updateproduct/{id:[0-9]+}", UpdateProduct)
 	router.HandleFunc("/updatecategory/{id:[0-9]+}", UpdateCategory)
+	router.HandleFunc("/updateproperty/{id:[0-9]+}", UpdateProductProperty)
+	router.HandleFunc("/deletepr/{id:[0-9]+}", DeleteProductPropertyPost)
 	router.HandleFunc("/update_product", UpdateProductPost)
+	router.HandleFunc("/update_productproperty", UpdateProductPropertyPost)
 	router.HandleFunc("/update_category", UpdateCategoryPost)
 	router.HandleFunc("/login_check", LoginCheck)
 	router.HandleFunc("/products", Products)
